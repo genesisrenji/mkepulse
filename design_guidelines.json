@@ -1,0 +1,86 @@
+{
+  "theme": "Archetype 2 (Performance Pro) / Archetype 4 (Swiss & High-Contrast)",
+  "colors": {
+    "brand_navy": "#0E2240",
+    "admin_bg": "#0A0F1A",
+    "brand_gold": "#C4973B",
+    "brand_cream": "#FDFAF4",
+    "brand_pinstripe_white": "#FDFAF4",
+    "user_text_primary": "#0A0F1A",
+    "user_text_secondary": "#4B5563",
+    "admin_text_primary": "#FDFAF4",
+    "admin_text_secondary": "#9CA3AF",
+    "admin_surface": "#141F33",
+    "admin_border": "rgba(253, 250, 244, 0.1)",
+    "user_border": "rgba(14, 34, 64, 0.1)"
+  },
+  "typography": {
+    "headings": "system-ui, -apple-system, sans-serif",
+    "body": "system-ui, -apple-system, sans-serif",
+    "rules": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "body": "text-base leading-relaxed",
+      "labels": "text-xs font-bold uppercase tracking-[0.2em]"
+    }
+  },
+  "layout_and_spacing": {
+    "philosophy": "Generous spacing (p-6, p-8) for user side, Dense Control Room grid for Admin.",
+    "user_layout": "Clean light theme. Dark navy sidebar on desktop. Cream #FDFAF4 background.",
+    "admin_layout": "Strict grid hierarchy. gap-4 or gap-6. Flat solid surfaces with 1px subtle borders.",
+    "borders": "User side: rounded-xl. Admin side: rounded-lg or sharp corners with 1px border."
+  },
+  "components_customization": {
+    "buttons": "Primary: bg-[#C4973B] text-[#0A0F1A] hover:bg-[#A98232]. Secondary: bg-transparent border border-[#0E2240] text-[#0E2240] (User) / border-[#C4973B] text-[#C4973B] (Admin).",
+    "cards_user": "bg-[#FDFAF4] border border-[#0E2240]/10 shadow-sm rounded-xl p-6. Hover: shadow-md -translate-y-1 transition-transform.",
+    "cards_admin": "bg-[#141F33] border border-[#FDFAF4]/10 rounded-lg p-6.",
+    "event_card_badges": "Live/Tonight: bg-[#C4973B] text-[#0A0F1A] text-xs font-bold uppercase tracking-wider px-2 py-1 rounded.",
+    "capacity_bar": "h-2 rounded-full bg-gray-200 (User) or bg-gray-800 (Admin) with fill color #C4973B.",
+    "sidebar": "User: bg-[#0E2240] text-[#FDFAF4]. Admin: bg-[#0A0F1A] border-r border-[#FDFAF4]/10."
+  },
+  "motion_and_interaction": {
+    "hover_states": "Cards lift (-translate-y-1). Buttons darken or glow. Text color explicitly set on hover.",
+    "transitions": "transition-all duration-200 ease-in-out"
+  },
+  "icons_and_assets": {
+    "icon_library": "lucide-react"
+  },
+  "image_urls": [
+    {
+      "category": "hero_background",
+      "url": "https://static.prod-images.emergentagent.com/jobs/2b51d513-a10e-4f6e-9ea0-6cf745f57afa/images/37c0c19507efa06cc560a3f8b976472d3bff9447125f2705d44df39916b2c5a6.png",
+      "description": "Cream pinstripe background for user side auth/onboarding screens."
+    },
+    {
+      "category": "map_background",
+      "url": "https://static.prod-images.emergentagent.com/jobs/2b51d513-a10e-4f6e-9ea0-6cf745f57afa/images/8dc26a431c7c9c0beb3642d69812c187654b7064450fa6b6bd794d02703857e1.png",
+      "description": "Dark map background for map screen placeholders or admin."
+    },
+    {
+      "category": "city_skyline",
+      "url": "https://images.unsplash.com/photo-1549899429-047eb2085d0c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwxfHxtaWx3YXVrZWUlMjBza3lsaW5lfGVufDB8fHx8MTc3NjA5Nzk2Nnww&ixlib=rb-4.1.0&q=85",
+      "description": "Milwaukee Skyline for main banners."
+    },
+    {
+      "category": "event_concert",
+      "url": "https://images.unsplash.com/photo-1551873521-929040ff8bc4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHw0fHxjb25jZXJ0JTIwY3Jvd2QlMjBuaWdodHxlbnwwfHx8fDE3NzYwOTc5NjZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Concert crowd for music event cards."
+    },
+    {
+      "category": "event_food",
+      "url": "https://images.pexels.com/photos/9864907/pexels-photo-9864907.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Food festival crowd for food event cards."
+    }
+  ],
+  "instructions_to_main_agent": [
+    "Ensure all interactive elements have data-testid attributes (e.g. data-testid='event-card-1').",
+    "Use standard HTML/Tailwind for structural layout and Shadcn UI for complex interactives (dropdowns, dialogs).",
+    "Implement the Leaflet map with dark theme tiles for Admin and light/custom tiles for User.",
+    "Ensure the user interface is light theme with Cream #FDFAF4 background, but the sidebar is dark Navy #0E2240.",
+    "Ensure the admin portal is strictly dark mode with Navy #0A0F1A background, Gold #C4973B accents, and 1px borders.",
+    "Onboarding quiz (6 steps) should be implemented as a clean stepper form.",
+    "Event cards must densely pack title, venue, badge, capacity bar, crowd count, distance, and parking info without looking cluttered. Use grid layouts within the card.",
+    "Avoid using Shadcn Card component if it restricts custom spacing/borders too much; use pure div for event cards if needed."
+  ]
+}
