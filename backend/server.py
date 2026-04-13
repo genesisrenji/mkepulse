@@ -28,8 +28,8 @@ app = FastAPI(title="MKEpulse API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL, "http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -87,11 +87,10 @@ def haversine(lat1, lng1, lat2, lng2):
 
 
 async def get_current_user(request: Request) -> dict:
-    token = request.cookies.get("access_token")
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
@@ -108,6 +107,8 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Token expired")
     except pyjwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="Authentication failed")
 
@@ -257,14 +258,10 @@ async def register(req: RegisterRequest):
     result = await db.users.insert_one(user_doc)
     user_id = str(result.inserted_id)
     access_token = create_access_token(user_id, email, "user")
-    refresh_token = create_refresh_token(user_id)
-    response = JSONResponse(content={
+    return {
         "id": user_id, "email": email, "name": user_doc["name"],
         "role": "user", "tier": "free", "token": access_token
-    })
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=86400, path="/")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
-    return response
+    }
 
 @app.post("/api/auth/login")
 async def login(req: LoginRequest):
@@ -275,14 +272,10 @@ async def login(req: LoginRequest):
     user_id = str(user["_id"])
     role = user.get("role", "user")
     access_token = create_access_token(user_id, email, role)
-    refresh_token = create_refresh_token(user_id)
-    response = JSONResponse(content={
+    return {
         "id": user_id, "email": email, "name": user.get("name", ""),
         "role": role, "tier": user.get("tier", "free"), "token": access_token
-    })
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=86400, path="/")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
-    return response
+    }
 
 @app.get("/api/auth/me")
 async def me(user: dict = Depends(get_current_user)):
@@ -290,10 +283,7 @@ async def me(user: dict = Depends(get_current_user)):
 
 @app.post("/api/auth/logout")
 async def logout():
-    response = JSONResponse(content={"logged_out": True})
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/")
-    return response
+    return {"logged_out": True}
 
 
 # ===================== PREFERENCES / ONBOARDING =====================

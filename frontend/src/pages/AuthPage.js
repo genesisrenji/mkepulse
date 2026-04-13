@@ -28,7 +28,8 @@ export default function AuthPage() {
         navigate('/onboarding');
       }
     } catch (err) {
-      setError(formatError(err.response?.data?.detail) || err.message);
+      const detail = err.response?.data?.detail;
+      setError(formatError(detail) || err.message || 'Connection error. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -2,7 +2,6 @@ import axios from 'axios';
 
 const API = axios.create({
   baseURL: process.env.REACT_APP_BACKEND_URL,
-  withCredentials: true,
 });
 
 API.interceptors.request.use((config) => {
@@ -16,7 +15,7 @@ API.interceptors.request.use((config) => {
 export default API;
 
 export function formatError(detail) {
-  if (detail == null) return 'Something went wrong.';
+  if (detail == null) return 'Something went wrong. Please try again.';
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail))
     return detail.map(e => e?.msg || JSON.stringify(e)).join(' ');
