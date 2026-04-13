@@ -181,6 +181,22 @@ async def seed_data():
     elif not verify_password(admin_password, existing["password_hash"]):
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
 
+    # Seed test users
+    test_users = [
+        {"email": "free@mkepulse.com", "password": "FreeUser2026!", "name": "Alex Milwaukee", "role": "user", "tier": "free"},
+        {"email": "pro@mkepulse.com", "password": "ProUser2026!", "name": "Jordan Brewers", "role": "user", "tier": "pro"},
+    ]
+    for tu in test_users:
+        existing_tu = await db.users.find_one({"email": tu["email"]})
+        if not existing_tu:
+            await db.users.insert_one({
+                "email": tu["email"], "password_hash": hash_password(tu["password"]),
+                "name": tu["name"], "role": tu["role"], "tier": tu["tier"],
+                "created_at": datetime.now(timezone.utc)
+            })
+        elif not verify_password(tu["password"], existing_tu["password_hash"]):
+            await db.users.update_one({"email": tu["email"]}, {"$set": {"password_hash": hash_password(tu["password"])}})
+
     # Seed garages
     garage_count = await db.parking_garages.count_documents({})
     if garage_count == 0:

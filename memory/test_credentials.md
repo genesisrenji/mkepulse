@@ -6,16 +6,23 @@
 - **Role:** admin
 - **Tier:** pro
 
-## Test User (can be created via registration)
-- Any email/password via /auth Sign Up flow
+## Free Tier User
+- **Email:** free@mkepulse.com
+- **Password:** FreeUser2026!
 - **Role:** user
-- **Tier:** free
+- **Tier:** free (max 8 events, no geo alerts, no AI picks)
+
+## Pro Tier User
+- **Email:** pro@mkepulse.com
+- **Password:** ProUser2026!
+- **Role:** user
+- **Tier:** pro (unlimited events, all features)
 
 ## Auth Endpoints
-- POST /api/auth/register — Register new user
-- POST /api/auth/login — Login
-- GET /api/auth/me — Get current user
-- POST /api/auth/logout — Logout
+- POST /api/auth/register
+- POST /api/auth/login
+- GET /api/auth/me
+- POST /api/auth/logout
 
 ## API Base URL
 - https://6e012e97-6085-40c8-b0fe-bb395e2e6d2e.preview.emergentagent.com
