@@ -1,0 +1,69 @@
+# ============================================================
+#  MKEpulse — security/gitleaks.toml
+#  Custom secret detection rules for Gitleaks
+#  Extends default ruleset with MKEpulse-specific patterns
+# ============================================================
+
+title = "MKEpulse Gitleaks Config"
+
+[extend]
+useDefault = true  # inherit all default Gitleaks rules
+
+# ── Custom rules ──────────────────────────────────────────────
+
+[[rules]]
+id          = "mkepulse-supabase-service-key"
+description = "Supabase service role key (never expose client-side)"
+regex       = '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9+/=]+\.[A-Za-z0-9\-_]+'''
+tags        = ["supabase", "jwt", "service-role"]
+severity    = "critical"
+[rules.allowlist]
+  paths = [".env.example", "*.md", "*.test.*"]
+
+[[rules]]
+id          = "mkepulse-stripe-secret"
+description = "Stripe secret key (sk_live_ or sk_test_)"
+regex       = '''sk_(live|test)_[A-Za-z0-9]{24,}'''
+tags        = ["stripe", "payment"]
+severity    = "critical"
+
+[[rules]]
+id          = "mkepulse-stripe-webhook"
+description = "Stripe webhook signing secret"
+regex       = '''whsec_[A-Za-z0-9]{32,}'''
+tags        = ["stripe", "webhook"]
+severity    = "critical"
+
+[[rules]]
+id          = "mkepulse-mke-api-token"
+description = "Milwaukee Open Data app token"
+regex       = '''(?i)(mke_open_data|milwaukee.*data).*[=:]\s*['"]?[A-Za-z0-9\-_]{20,}['"]?'''
+tags        = ["milwaukee", "open-data"]
+severity    = "high"
+
+[[rules]]
+id          = "mkepulse-google-maps-key"
+description = "Google Maps API key"
+regex       = '''AIza[A-Za-z0-9\-_]{35}'''
+tags        = ["google", "maps"]
+severity    = "high"
+
+# ── Global allowlist ──────────────────────────────────────────
+[allowlist]
+  description = "Safe files — no secret scanning needed"
+  paths = [
+    ".env.example",
+    "**/*.test.js",
+    "**/*.spec.js",
+    "**/__tests__/**",
+    "**/*.md",
+    "**/CHANGELOG*",
+    "security/gitleaks.toml",
+  ]
+  # Known-safe test strings
+  regexes = [
+    '''sk_test_EXAMPLE''',
+    '''your-key-here''',
+    '''your-token''',
+    '''REPLACE_ME''',
+  ]

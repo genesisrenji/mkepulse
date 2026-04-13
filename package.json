@@ -1,0 +1,29 @@
+{
+  "name": "mkepulse-server",
+  "version": "1.0.0",
+  "description": "MKEpulse real-time server — Express + Socket.io + Stripe + Supabase",
+  "main": "server/index.js",
+  "scripts": {
+    "start":   "node server/index.js",
+    "dev":     "nodemon server/index.js",
+    "agent":   "node agent/index.js",
+    "migrate": "npx supabase db push",
+    "seed":    "npx supabase db reset --db-url $SUPABASE_URL"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.43.0",
+    "cors":                  "^2.8.5",
+    "dotenv":                "^16.4.5",
+    "express":               "^4.19.2",
+    "node-cron":             "^3.0.3",
+    "playwright":            "^1.44.0",
+    "socket.io":             "^4.7.5",
+    "stripe":                "^15.7.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.1"
+  }
+}

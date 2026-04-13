@@ -1,0 +1,147 @@
+# ============================================================
+#  MKEpulse — security/semgrep-rules.yml
+#  Custom SAST rules that extend Semgrep's standard ruleset
+#  with MKEpulse-specific insecure patterns.
+#
+#  Run locally: semgrep --config=security/semgrep-rules.yml .
+# ============================================================
+
+rules:
+
+  # ── Auth bypass patterns ────────────────────────────────────
+  - id: mkepulse-missing-auth-middleware
+    patterns:
+      - pattern: |
+          $APP.get($ROUTE, $HANDLER)
+      - pattern-not: |
+          $APP.get($ROUTE, requireAuth, ...)
+      - pattern-not: |
+          $APP.get($ROUTE, optionalAuth, ...)
+      - metavariable-regex:
+          metavariable: $ROUTE
+          regex: '''^['"]/api/.*['"]$'''
+    message: >
+      API route $ROUTE is missing auth middleware (requireAuth or optionalAuth).
+      All /api/ routes must explicitly declare their auth posture.
+    severity: ERROR
+    languages: [javascript]
+    metadata:
+      category: security
+      cwe: "CWE-306: Missing Authentication for Critical Function"
+      owasp: "A01:2021 - Broken Access Control"
+
+  - id: mkepulse-admin-route-no-gate
+    patterns:
+      - pattern: |
+          $APP.$METHOD('/admin', ...)
+      - pattern-not: |
+          $APP.$METHOD('/admin', requireAdmin, ...)
+    message: >
+      Admin route is missing requireAdmin middleware. Admin routes must
+      explicitly enforce the admin role gate.
+    severity: ERROR
+    languages: [javascript]
+    metadata:
+      category: security
+      cwe: "CWE-862: Missing Authorization"
+
+  # ── Insecure direct object reference ────────────────────────
+  - id: mkepulse-idor-risk
+    patterns:
+      - pattern: |
+          $DB.from($TABLE).select(...).eq('id', $REQ.params.$ID)
+      - pattern-not: |
+          $DB.from($TABLE).select(...).eq('id', $REQ.params.$ID).eq('user_id', $REQ.profile.id)
+    message: >
+      Potential IDOR: querying by ID without scoping to the authenticated user.
+      Add .eq('user_id', req.profile.id) or verify ownership explicitly.
+    severity: WARNING
+    languages: [javascript]
+    metadata:
+      category: security
+      cwe: "CWE-639: Authorization Bypass Through User-Controlled Key"
+      owasp: "A01:2021 - Broken Access Control"
+
+  # ── SQL injection via raw queries ────────────────────────────
+  - id: mkepulse-raw-sql-injection
+    patterns:
+      - pattern: |
+          $DB.rpc($FUNC, { ..., $KEY: $REQ.body.$VAL, ... })
+      - pattern-not: |
+          $DB.rpc($FUNC, { ..., $KEY: parseInt($REQ.body.$VAL), ... })
+      - pattern-not: |
+          $DB.rpc($FUNC, { ..., $KEY: validate($REQ.body.$VAL), ... })
+    message: >
+      Raw user input passed to Supabase RPC without sanitization.
+      Validate and sanitize all inputs before passing to database functions.
+    severity: WARNING
+    languages: [javascript]
+    metadata:
+      category: security
+      cwe: "CWE-89: SQL Injection"
+
+  # ── Service role key exposure ────────────────────────────────
+  - id: mkepulse-service-role-client-side
+    patterns:
+      - pattern: |
+          createClient($URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+      - pattern-not-inside: |
+          // server-only ...
+    message: >
+      SUPABASE_SERVICE_ROLE_KEY must only be used in server-side code.
+      Never expose the service role key to the frontend or client bundle.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      category: security
+      cwe: "CWE-312: Cleartext Storage of Sensitive Information"
+
+  # ── JWT verification bypass ──────────────────────────────────
+  - id: mkepulse-jwt-no-verify
+    patterns:
+      - pattern: |
+          jwt.decode($TOKEN)
+      - pattern-not: |
+          jwt.verify($TOKEN, $SECRET)
+    message: >
+      jwt.decode() does not verify the signature — anyone can forge a token.
+      Use jwt.verify() with the secret, or use Supabase's auth.getUser().
+    severity: ERROR
+    languages: [javascript]
+    metadata:
+      category: security
+      cwe: "CWE-347: Improper Verification of Cryptographic Signature"
+
+  # ── Hardcoded secrets ────────────────────────────────────────
+  - id: mkepulse-hardcoded-secret
+    patterns:
+      - pattern-either:
+          - pattern: const $KEY = "sk_live_..."
+          - pattern: const $KEY = "whsec_..."
+          - pattern: const $KEY = "eyJhbGci..."
+    message: >
+      Hardcoded secret detected. All secrets must come from environment
+      variables (process.env.*), never hardcoded in source.
+    severity: ERROR
+    languages: [javascript, typescript]
+    metadata:
+      category: security
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+
+  # ── Rate limiting on sensitive routes ────────────────────────
+  - id: mkepulse-no-rate-limit-auth
+    patterns:
+      - pattern: |
+          $APP.post('/api/auth/...', $HANDLER)
+      - pattern-not: |
+          $APP.post('/api/auth/...', authLimiter, ...)
+      - pattern-not: |
+          $APP.post('/api/auth/...', rateLimiter, ...)
+    message: >
+      Auth endpoint missing rate limiter middleware. Brute-force attacks
+      on auth routes must be mitigated with authLimiter or rateLimiter.
+    severity: ERROR
+    languages: [javascript]
+    metadata:
+      category: security
+      cwe: "CWE-307: Improper Restriction of Excessive Authentication Attempts"

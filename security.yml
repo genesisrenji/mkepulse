@@ -1,0 +1,365 @@
+# ============================================================
+#  MKEpulse — .github/workflows/security.yml
+#
+#  PRIORITY 1: SAST + SCA — blocks insecure merges
+#
+#  Runs on every PR and push to main/develop.
+#  ALL jobs must pass before merge is allowed.
+#  Configure in GitHub: Settings → Branches → Branch protection rules
+#    ✓ Require status checks to pass before merging
+#    ✓ Require branches to be up to date
+#    Status checks required:
+#      - sast-semgrep
+#      - sca-dependency-audit
+#      - secret-scan
+#      - license-compliance
+#      - security-gate (final gate — only passes if ALL above pass)
+# ============================================================
+
+name: Security CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents:      read
+  security-events: write   # for SARIF upload to GitHub Security tab
+  pull-requests: write      # for PR comments
+  checks:        write
+
+# ── Shared environment ────────────────────────────────────────
+env:
+  NODE_VERSION: '20'
+  FAIL_ON_SEVERITY: high   # block on: critical, high | warn on: medium, low
+
+jobs:
+
+  # ══════════════════════════════════════════════════════════
+  #  JOB 1: SAST — Static Application Security Testing
+  #  Tool: Semgrep (covers OWASP Top 10, injection, auth flaws,
+  #         secrets in code, insecure patterns, Node.js specifics)
+  # ══════════════════════════════════════════════════════════
+  sast-semgrep:
+    name: SAST — Semgrep
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep SAST scan
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        run: |
+          semgrep ci \
+            --config=p/owasp-top-ten \
+            --config=p/nodejs \
+            --config=p/jwt \
+            --config=p/secrets \
+            --config=p/sql-injection \
+            --config=p/xss \
+            --sarif \
+            --output=semgrep.sarif \
+            --error \
+            --severity=ERROR
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Comment PR with findings
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## ❌ SAST scan failed — merge blocked\n\n';
+            body += 'Semgrep found security issues that must be resolved before this PR can merge.\n\n';
+            body += '**Check the Security tab for detailed findings.**\n\n';
+            body += '| Severity | Action |\n|----------|--------|\n';
+            body += '| 🔴 Critical / High | Must fix before merge |\n';
+            body += '| 🟡 Medium | Must fix or document exception |\n';
+            body += '| 🟢 Low | Fix recommended, not blocking |\n\n';
+            body += 'Run locally: `npx semgrep --config=p/owasp-top-ten .`';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  # ══════════════════════════════════════════════════════════
+  #  JOB 2: SCA — Software Composition Analysis
+  #  Checks for known CVEs in npm dependencies.
+  #  Tools: npm audit + Snyk (belt and suspenders)
+  # ══════════════════════════════════════════════════════════
+  sca-dependency-audit:
+    name: SCA — Dependency audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (built-in SCA)
+        run: |
+          npm audit --audit-level=${{ env.FAIL_ON_SEVERITY }} \
+            --json > npm-audit.json || true
+          # Parse and fail on high/critical
+          node -e "
+            const audit = require('./npm-audit.json');
+            const vulns = audit.metadata?.vulnerabilities ?? {};
+            const blocking = (vulns.critical ?? 0) + (vulns.high ?? 0);
+            if (blocking > 0) {
+              console.error('BLOCKED: ' + blocking + ' high/critical vulnerabilities found');
+              console.error(JSON.stringify(vulns, null, 2));
+              process.exit(1);
+            }
+            console.log('SCA npm audit passed:', JSON.stringify(vulns));
+          "
+
+      - name: Snyk SCA scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: >
+            --severity-threshold=${{ env.FAIL_ON_SEVERITY }}
+            --json-file-output=snyk.json
+            --all-projects
+        continue-on-error: false
+
+      - name: Upload Snyk results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk.sarif
+          category: snyk
+        continue-on-error: true
+
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-reports
+          path: |
+            npm-audit.json
+            snyk.json
+          retention-days: 30
+
+  # ══════════════════════════════════════════════════════════
+  #  JOB 3: Secret scanning
+  #  Prevents credentials, API keys, tokens from being
+  #  committed. Blocks merge if any secrets detected.
+  # ══════════════════════════════════════════════════════════
+  secret-scan:
+    name: Secret scan — Gitleaks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (full history for git log scan)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        with:
+          args: >
+            detect
+            --source=.
+            --config=security/gitleaks.toml
+            --redact
+            --exit-code=1
+            --report-format=sarif
+            --report-path=gitleaks.sarif
+
+      - name: Upload Gitleaks SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+        continue-on-error: true
+
+  # ══════════════════════════════════════════════════════════
+  #  JOB 4: License compliance
+  #  Blocks GPL/AGPL/SSPL dependencies (not compatible with
+  #  commercial SaaS deployment).
+  # ══════════════════════════════════════════════════════════
+  license-compliance:
+    name: License compliance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install license-checker
+        run: npm install -g license-checker
+
+      - name: Check licenses
+        run: |
+          license-checker \
+            --excludePrivatePackages \
+            --failOn "GPL;AGPL;LGPL;SSPL;BUSL" \
+            --json \
+            --out license-report.json
+          echo "License check passed"
+
+      - name: Upload license report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: license-report.json
+          retention-days: 30
+
+  # ══════════════════════════════════════════════════════════
+  #  JOB 5: CodeQL — deep semantic analysis
+  #  Finds logic-level vulnerabilities Semgrep may miss.
+  # ══════════════════════════════════════════════════════════
+  codeql-analysis:
+    name: CodeQL semantic analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
+
+  # ══════════════════════════════════════════════════════════
+  #  FINAL GATE — All security checks must pass
+  #  This is the status check GitHub branch protection
+  #  requires. If any upstream job fails, this fails.
+  #  Configure as required status check in branch rules.
+  # ══════════════════════════════════════════════════════════
+  security-gate:
+    name: Security gate (merge blocker)
+    runs-on: ubuntu-latest
+    needs:
+      - sast-semgrep
+      - sca-dependency-audit
+      - secret-scan
+      - license-compliance
+      - codeql-analysis
+    if: always()
+
+    steps:
+      - name: Evaluate all security jobs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const results = {
+              'sast-semgrep':          '${{ needs.sast-semgrep.result }}',
+              'sca-dependency-audit':  '${{ needs.sca-dependency-audit.result }}',
+              'secret-scan':           '${{ needs.secret-scan.result }}',
+              'license-compliance':    '${{ needs.license-compliance.result }}',
+              'codeql-analysis':       '${{ needs.codeql-analysis.result }}',
+            };
+
+            const failed  = Object.entries(results).filter(([,v]) => v === 'failure');
+            const skipped = Object.entries(results).filter(([,v]) => v === 'skipped');
+
+            console.log('Security job results:', JSON.stringify(results, null, 2));
+
+            if (failed.length > 0) {
+              const msg = '❌ SECURITY GATE FAILED — merge blocked\n\nFailed checks:\n'
+                + failed.map(([k]) => `  • ${k}`).join('\n');
+              core.setFailed(msg);
+            } else {
+              console.log('✅ All security checks passed — merge allowed');
+            }
+
+      - name: Post security gate summary
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const passed = '${{ needs.sast-semgrep.result }}' === 'success'
+                        && '${{ needs.sca-dependency-audit.result }}' === 'success'
+                        && '${{ needs.secret-scan.result }}' === 'success'
+                        && '${{ needs.license-compliance.result }}' === 'success';
+
+            const icon = passed ? '✅' : '❌';
+            const status = passed ? 'PASSED — merge allowed' : 'FAILED — merge blocked';
+
+            const body = [
+              `## ${icon} Security Gate: ${status}`,
+              '',
+              '| Check | Result |',
+              '|-------|--------|',
+              `| SAST (Semgrep) | ${{ needs.sast-semgrep.result }} |`,
+              `| SCA (npm audit + Snyk) | ${{ needs.sca-dependency-audit.result }} |`,
+              `| Secret scan (Gitleaks) | ${{ needs.secret-scan.result }} |`,
+              `| License compliance | ${{ needs.license-compliance.result }} |`,
+              `| CodeQL analysis | ${{ needs.codeql-analysis.result }} |`,
+              '',
+              passed
+                ? '_All security checks passed. This PR may be merged._'
+                : '_Fix all failing checks before this PR can be merged. See Security tab for details._',
+            ].join('\n');
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
