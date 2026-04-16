@@ -31,6 +31,9 @@ JWT_SECRET = os.environ.get("JWT_SECRET")
 JWT_ALGORITHM = "HS256"
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
+TICKETMASTER_API_KEY = os.environ.get("TICKETMASTER_API_KEY")
+EVENTBRITE_API_KEY = os.environ.get("EVENTBRITE_API_KEY")
+INSTAGRAM_ACCESS_TOKEN = os.environ.get("INSTAGRAM_ACCESS_TOKEN")
 EARTH_RADIUS_MILES = 3958.8
 FREE_TIER_LIMIT = 8
 
@@ -703,57 +706,24 @@ async def admin_settings(user: dict = Depends(require_admin)):
 
     api_keys = {
         "STRIPE_API_KEY": "configured" if STRIPE_API_KEY else "missing",
-        "TICKETMASTER_API_KEY": "not configured",
-        "EVENTBRITE_API_KEY": "not configured",
-        "INSTAGRAM_ACCESS_TOKEN": "not configured",
+        "TICKETMASTER_API_KEY": "configured" if TICKETMASTER_API_KEY else "not configured",
+        "EVENTBRITE_API_KEY": "configured" if EVENTBRITE_API_KEY else "not configured",
+        "INSTAGRAM_ACCESS_TOKEN": "configured" if INSTAGRAM_ACCESS_TOKEN else "not configured",
         "MKE_OPEN_DATA_APP_TOKEN": "not configured",
-        "GOOGLE_MAPS_API_KEY": "not configured",
+        "GOOGLE_MAPS_API_KEY": "not configured (using Leaflet/OSM)",
     }
     return {"config": config, "api_keys": api_keys}
 
 # AI Crawl Agent control
+from crawl_agent import run_crawl_cycle
 agent_paused = False
 
 @app.post("/api/admin/agent/trigger")
 async def admin_trigger_crawl(user: dict = Depends(require_admin)):
-    """Force an immediate crawl cycle"""
-    now = datetime.now(timezone.utc)
-    sources = ["ticketmaster", "eventbrite", "instagram", "onmilwaukee", "milwaukee_com", "visit_milwaukee"]
-    run_id = await db.crawl_runs.insert_one({
-        "started_at": now, "status": "running", "events_found": 0, "events_new": 0,
-        "events_updated": 0, "events_skipped": 0, "sources_ok": [], "sources_failed": [],
-    })
-
-    await sio.emit('agent:log', {"line": "Force crawl triggered by admin", "type": "info", "ts": now.isoformat()})
-
-    # Simulate crawl with logging
-    total_found, total_new, total_updated = 0, 0, 0
-    sources_ok, sources_failed = [], []
-    for source in sources:
-        await asyncio.sleep(0.3)
-        found = random.randint(1, 5)
-        new_count = random.randint(0, 2)
-        total_found += found
-        total_new += new_count
-        total_updated += found - new_count
-        sources_ok.append(source)
-        await sio.emit('agent:log', {"line": f"[{source}] Found {found} events ({new_count} new)", "type": "ok" if new_count > 0 else "info", "ts": datetime.now(timezone.utc).isoformat()})
-
-    finished = datetime.now(timezone.utc)
-    duration_ms = int((finished - now).total_seconds() * 1000)
-    await db.crawl_runs.update_one(
-        {"_id": run_id.inserted_id},
-        {"$set": {
-            "finished_at": finished, "duration_ms": duration_ms, "status": "completed",
-            "events_found": total_found, "events_new": total_new, "events_updated": total_updated,
-            "sources_ok": sources_ok, "sources_failed": sources_failed,
-        }}
-    )
-
-    await sio.emit('agent:log', {"line": f"Crawl complete: {total_found} found, {total_new} new, {total_updated} updated ({duration_ms}ms)", "type": "ok", "ts": finished.isoformat()})
-    await sio.emit('agent:cycle_complete', serialize_doc(await db.crawl_runs.find_one({"_id": run_id.inserted_id})))
-
-    return {"triggered": True, "run_id": str(run_id.inserted_id), "events_found": total_found, "events_new": total_new}
+    """Force an immediate real crawl cycle"""
+    await sio.emit('agent:log', {"line": "Force crawl triggered by admin", "type": "info", "ts": datetime.now(timezone.utc).isoformat()})
+    result = await run_crawl_cycle(db, sio)
+    return {"triggered": True, **result}
 
 @app.post("/api/admin/agent/pause")
 async def admin_pause_agent(user: dict = Depends(require_admin)):
