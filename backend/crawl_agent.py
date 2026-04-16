@@ -172,40 +172,24 @@ async def fetch_instagram():
     events = []
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            # Search for #MKEevents hashtag
-            resp = await client.get(
-                "https://graph.facebook.com/v19.0/ig_hashtag_search",
-                params={
-                    "q": "MKEevents",
-                    "user_id": INSTAGRAM_ACCESS_TOKEN.split("|")[0] if "|" in INSTAGRAM_ACCESS_TOKEN else "",
-                    "access_token": INSTAGRAM_ACCESS_TOKEN,
-                }
-            )
-            if resp.status_code != 200:
-                return [], f"http_{resp.status_code}"
-            data = resp.json()
-            hashtag_id = data.get("data", [{}])[0].get("id") if data.get("data") else None
-            if not hashtag_id:
-                return [], "no_hashtag_found"
-
-            # Get recent media
+            # Get user's recent media
             media_resp = await client.get(
-                f"https://graph.facebook.com/v19.0/{hashtag_id}/recent_media",
+                "https://graph.instagram.com/v21.0/me/media",
                 params={
-                    "user_id": INSTAGRAM_ACCESS_TOKEN.split("|")[0] if "|" in INSTAGRAM_ACCESS_TOKEN else "",
-                    "fields": "id,caption,timestamp,permalink",
+                    "fields": "id,caption,timestamp,permalink,media_type",
+                    "limit": 25,
                     "access_token": INSTAGRAM_ACCESS_TOKEN,
                 }
             )
             if media_resp.status_code != 200:
                 return [], f"media_http_{media_resp.status_code}"
 
-            for post in media_resp.json().get("data", [])[:10]:
+            posts = media_resp.json().get("data", [])
+            for post in posts:
                 caption = post.get("caption", "") or ""
-                if len(caption) < 20:
+                if len(caption) < 10:
                     continue
-                # Extract event-like info from caption
-                title = caption.split("\n")[0][:100] if caption else "Instagram Event"
+                title = caption.split("\n")[0][:100]
                 events.append({
                     "external_id": f"IG-{post.get('id', '')}",
                     "source": "instagram",
@@ -215,13 +199,13 @@ async def fetch_instagram():
                     "category": classify_category(caption),
                     "venue_name": "Milwaukee (via Instagram)",
                     "address": "Milwaukee, WI",
-                    "neighborhood": "downtown",
-                    "lat": MKE_LAT,
-                    "lng": MKE_LNG,
+                    "neighborhood": classify_neighborhood(caption),
+                    "lat": MKE_LAT + (hash(post.get("id", "")) % 100 - 50) * 0.0003,
+                    "lng": MKE_LNG + (hash(post.get("id", "")) % 100 - 50) * 0.0003,
                     "starts_at": post.get("timestamp"),
                     "price_min": None,
                     "price_max": None,
-                    "ai_confidence": 0.65,  # lower confidence for scraped data
+                    "ai_confidence": 0.60,
                 })
         return events, "ok"
     except Exception as ex:
