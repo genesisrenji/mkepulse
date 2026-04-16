@@ -236,6 +236,122 @@ class MKEPulseAPITester:
         success, response = self.run_test("Logout", "POST", "api/auth/logout", 200)
         return success
 
+    def test_free_user_login(self):
+        """Test free user login"""
+        success, response = self.run_test(
+            "Free User Login",
+            "POST",
+            "api/auth/login",
+            200,
+            data={"email": "free@mkepulse.com", "password": "FreeUser2026!"}
+        )
+        if success and 'token' in response:
+            self.token = response['token']
+            print(f"   Free user token obtained: {self.token[:20]}...")
+            return True
+        return False
+
+    def test_pro_user_login(self):
+        """Test pro user login"""
+        success, response = self.run_test(
+            "Pro User Login",
+            "POST",
+            "api/auth/login",
+            200,
+            data={"email": "pro@mkepulse.com", "password": "ProUser2026!"}
+        )
+        if success and 'token' in response:
+            self.token = response['token']
+            print(f"   Pro user token obtained: {self.token[:20]}...")
+            return True
+        return False
+
+    def test_geo_update_free_user(self):
+        """Test geo update with free user - should return pro_required"""
+        # First login as free user
+        if not self.test_free_user_login():
+            print("   ❌ Failed to login as free user")
+            return False
+        
+        success, response = self.run_test(
+            "Geo Update (Free User)",
+            "POST",
+            "api/geo/update",
+            200,
+            data={"lat": 43.04, "lng": -87.91}
+        )
+        if success:
+            if response.get('reason') == 'pro_required' and not response.get('checked'):
+                print("   ✅ Correctly returned pro_required for free user")
+                return True
+            else:
+                print(f"   ❌ Expected pro_required, got: {response}")
+                return False
+        return False
+
+    def test_geo_update_pro_user(self):
+        """Test geo update with pro user - should return alerts"""
+        # First login as pro user
+        if not self.test_pro_user_login():
+            print("   ❌ Failed to login as pro user")
+            return False
+        
+        success, response = self.run_test(
+            "Geo Update (Pro User)",
+            "POST",
+            "api/geo/update",
+            200,
+            data={"lat": 43.04, "lng": -87.91}
+        )
+        if success:
+            if response.get('checked') and 'alerts_count' in response:
+                print(f"   ✅ Pro user geo update successful, found {response.get('alerts_count', 0)} alerts")
+                return True
+            else:
+                print(f"   ❌ Expected checked=True with alerts, got: {response}")
+                return False
+        return False
+
+    def test_stripe_checkout(self):
+        """Test Stripe checkout creation"""
+        # Use free user for checkout
+        if not self.test_free_user_login():
+            print("   ❌ Failed to login as free user")
+            return False
+        
+        success, response = self.run_test(
+            "Stripe Checkout",
+            "POST",
+            "api/stripe/checkout",
+            200,
+            data={"origin_url": "https://brewers-events.preview.emergentagent.com"}
+        )
+        if success:
+            if 'url' in response and 'session_id' in response:
+                print(f"   ✅ Checkout session created with URL: {response['url'][:50]}...")
+                return True
+            else:
+                print(f"   ❌ Expected url and session_id, got: {response}")
+                return False
+        return False
+
+    def test_stripe_subscription_status(self):
+        """Test Stripe subscription status"""
+        success, response = self.run_test(
+            "Stripe Subscription Status",
+            "GET",
+            "api/stripe/subscription",
+            200
+        )
+        if success:
+            if 'tier' in response and 'is_pro' in response:
+                print(f"   ✅ Subscription status: tier={response.get('tier')}, is_pro={response.get('is_pro')}")
+                return True
+            else:
+                print(f"   ❌ Expected tier and is_pro fields, got: {response}")
+                return False
+        return False
+
 def main():
     print("🚀 Starting MKEpulse API Testing")
     print("=" * 50)
@@ -258,6 +374,11 @@ def main():
         ("Admin Alerts", tester.test_admin_alerts),
         ("Admin Parking", tester.test_admin_parking),
         ("Admin Revenue", tester.test_admin_revenue),
+        # Phase 2 features
+        ("Geo Update (Free User)", tester.test_geo_update_free_user),
+        ("Geo Update (Pro User)", tester.test_geo_update_pro_user),
+        ("Stripe Checkout", tester.test_stripe_checkout),
+        ("Stripe Subscription Status", tester.test_stripe_subscription_status),
         ("Logout", tester.test_logout),
     ]
     

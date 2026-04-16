@@ -4,6 +4,8 @@ load_dotenv()
 import os
 import math
 import secrets
+import asyncio
+import random
 import bcrypt
 import jwt as pyjwt
 from datetime import datetime, timezone, timedelta
@@ -15,6 +17,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import motor.motor_asyncio
+import socketio
+
+# Stripe integration
+from emergentintegrations.payments.stripe.checkout import (
+    StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+)
 
 # --- Config ---
 MONGO_URL = os.environ.get("MONGO_URL")
@@ -22,17 +30,33 @@ DB_NAME = os.environ.get("DB_NAME")
 JWT_SECRET = os.environ.get("JWT_SECRET")
 JWT_ALGORITHM = "HS256"
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
 EARTH_RADIUS_MILES = 3958.8
+FREE_TIER_LIMIT = 8
+
+# --- Socket.io ---
+sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 
 app = FastAPI(title="MKEpulse API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=["https://brewers-events.preview.emergentagent.com", "http://localhost:3000"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Socket.io - expose as 'app' for uvicorn compatibility
+sio_asgi = socketio.ASGIApp(sio, other_asgi_app=app, socketio_path='/socket.io')
+
+# Override app for uvicorn to use Socket.io wrapped app
+import sys
+_module = sys.modules[__name__]
+_original_app = app
+# We keep `app` as FastAPI for route registration, but export sio_asgi for uvicorn
+# The supervisor runs `uvicorn server:app` - we need to make app = sio_asgi at module level
+# But we need the FastAPI app for decorators first, so we'll do this at the end of the file
 
 client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -145,6 +169,9 @@ class GeoUpdateRequest(BaseModel):
     lat: float
     lng: float
 
+class CheckoutRequest(BaseModel):
+    origin_url: str
+
 
 # ===================== SEED DATA =====================
 
@@ -248,11 +275,6 @@ async def seed_data():
             {"started_at": now - timedelta(hours=1), "finished_at": now - timedelta(hours=1) + timedelta(seconds=38), "duration_ms": 38000, "events_found": 8, "events_new": 1, "events_updated": 7, "events_skipped": 0, "sources_ok": ["ticketmaster", "eventbrite", "instagram", "onmilwaukee"], "sources_failed": ["visit_milwaukee"], "status": "completed"},
             {"started_at": now - timedelta(minutes=15), "finished_at": now - timedelta(minutes=15) + timedelta(seconds=52), "duration_ms": 52000, "events_found": 15, "events_new": 2, "events_updated": 13, "events_skipped": 0, "sources_ok": ["ticketmaster", "eventbrite", "instagram", "onmilwaukee", "milwaukee_com", "visit_milwaukee"], "sources_failed": [], "status": "completed"},
         ])
-
-
-@app.on_event("startup")
-async def startup():
-    await seed_data()
 
 
 # ===================== AUTH ENDPOINTS =====================
@@ -405,7 +427,6 @@ async def get_feed(request: Request, lat: Optional[float] = None, lng: Optional[
         if prefs_doc:
             prefs = prefs_doc
 
-    now = datetime.now(timezone.utc)
     events_cursor = db.events.find({
         "is_active": True, "ai_verified": True, "ai_pending_review": False,
     }).sort("starts_at", 1)
@@ -633,8 +654,277 @@ async def admin_revenue(user: dict = Depends(require_admin)):
     }
 
 
+# ===================== GEO PROXIMITY ALERTS =====================
+
+@app.post("/api/geo/update")
+async def geo_update(req: GeoUpdateRequest, user: dict = Depends(get_current_user)):
+    user_id = user["_id"]
+    is_pro = user.get("tier") == "pro"
+
+    # Update user location
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"last_lat": req.lat, "last_lng": req.lng, "last_location_at": datetime.now(timezone.utc)}}
+    )
+
+    if not is_pro:
+        return {"checked": False, "reason": "pro_required", "alerts": []}
+
+    # Fetch user preferences
+    prefs = await db.user_preferences.find_one({"user_id": user_id})
+    radius_mi = 3.0
+    pref_categories = []
+    if prefs:
+        radius_mi = prefs.get("geo_radius_miles", 3.0)
+        pref_categories = prefs.get("categories", [])
+
+    # Fetch active events
+    events = await db.events.find({"is_active": True, "ai_verified": True}).to_list(length=200)
+    garages = await db.parking_garages.find({"is_active": True}).to_list(length=50)
+
+    proximity_alerts = []
+    for event in events:
+        if not event.get("lat") or not event.get("lng"):
+            continue
+        dist_mi = haversine(req.lat, req.lng, event["lat"], event["lng"])
+        if dist_mi > radius_mi:
+            continue
+        # Category filter
+        if pref_categories and event.get("category") not in pref_categories:
+            continue
+
+        nearest_parking = find_nearest_parking(event, garages)
+        alert_data = {
+            "event": serialize_doc(event),
+            "distance_mi": round(dist_mi, 1),
+            "nearest_parking": nearest_parking,
+        }
+        proximity_alerts.append(alert_data)
+
+        # Store alert in DB
+        parking_info = ""
+        if nearest_parking:
+            parking_info = f" Parking: {nearest_parking['name']} ({nearest_parking['available_spaces']} open)"
+        event_title = event.get("title", "")
+        venue_name = event.get("venue_name", "an event")
+        await db.alerts.insert_one({
+            "severity": "info",
+            "title": f"You're near {venue_name}",
+            "description": f"{event_title} — {round(dist_mi, 1)} mi away.{parking_info}",
+            "type": "proximity",
+            "event_id": str(event["_id"]),
+            "user_id": user_id,
+            "is_resolved": False,
+            "created_at": datetime.now(timezone.utc),
+        })
+
+        # Emit via Socket.io
+        await sio.emit('geo:proximity_alert', alert_data, room=f"user:{user_id}")
+
+    return {"checked": True, "alerts_count": len(proximity_alerts), "alerts": proximity_alerts}
+
+
+# ===================== SOCKET.IO EVENTS =====================
+
+@sio.event
+async def connect(sid, environ):
+    print(f"[socket.io] Client connected: {sid}")
+
+@sio.event
+async def disconnect(sid):
+    print(f"[socket.io] Client disconnected: {sid}")
+
+@sio.event
+async def authenticate(sid, data):
+    """Client sends token to join personal room"""
+    token = data.get("token", "") if isinstance(data, dict) else ""
+    if not token:
+        return
+    try:
+        payload = pyjwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id:
+            sio.enter_room(sid, f"user:{user_id}")
+            print(f"[socket.io] User {user_id} joined room")
+    except Exception:
+        pass
+
+# Background task: simulate real-time updates
+async def simulate_realtime_updates():
+    """Runs every 30 seconds to simulate capacity and parking changes"""
+    while True:
+        await asyncio.sleep(30)
+        try:
+            # Simulate capacity updates
+            events = await db.events.find({"is_active": True, "is_live": True}).to_list(length=50)
+            for event in events:
+                delta = random.randint(-3, 5)
+                new_pct = max(0, min(100, (event.get("capacity_pct") or 50) + delta))
+                new_crowd = max(0, (event.get("crowd_count") or 0) + delta * 5)
+                await db.events.update_one(
+                    {"_id": event["_id"]},
+                    {"$set": {"capacity_pct": new_pct, "crowd_count": new_crowd, "updated_at": datetime.now(timezone.utc)}}
+                )
+                await sio.emit('event:capacity_update', {
+                    "id": str(event["_id"]),
+                    "capacity_pct": new_pct,
+                    "crowd_count": new_crowd,
+                })
+
+            # Simulate parking updates
+            garages = await db.parking_garages.find({"is_active": True}).to_list(length=50)
+            parking_updates = []
+            for g in garages:
+                delta = random.randint(-4, 5)
+                new_avail = max(0, min(g.get("total_spaces", 0), g.get("available_spaces", 0) + delta))
+                pct_full = (g["total_spaces"] - new_avail) / g["total_spaces"] if g.get("total_spaces", 0) > 0 else 0
+                new_status = "full" if new_avail == 0 else ("limited" if pct_full > 0.85 else "available")
+                await db.parking_garages.update_one(
+                    {"_id": g["_id"]},
+                    {"$set": {"available_spaces": new_avail, "status": new_status, "last_api_sync": datetime.now(timezone.utc)}}
+                )
+                parking_updates.append({
+                    "id": str(g["_id"]),
+                    "available_spaces": new_avail,
+                    "status": new_status,
+                })
+            await sio.emit('parking:update', {"garages": parking_updates, "updated_at": datetime.now(timezone.utc).isoformat()})
+
+        except Exception as e:
+            print(f"[realtime] simulation error: {e}")
+
+
+# ===================== STRIPE SUBSCRIPTION =====================
+
+PRO_PRICE = 4.14  # $4.14/mo
+
+@app.post("/api/stripe/checkout")
+async def create_checkout(req: CheckoutRequest, request: Request, user: dict = Depends(get_current_user)):
+    if user.get("tier") == "pro":
+        raise HTTPException(status_code=400, detail="Already subscribed to Pro")
+
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    origin = req.origin_url.rstrip("/")
+    success_url = f"{origin}/subscribe/success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/subscribe/cancel"
+
+    checkout_req = CheckoutSessionRequest(
+        amount=PRO_PRICE,
+        currency="usd",
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={"user_id": user["_id"], "user_email": user["email"], "plan": "pro"}
+    )
+    session: CheckoutSessionResponse = await stripe_checkout.create_checkout_session(checkout_req)
+
+    # Record transaction
+    await db.payment_transactions.insert_one({
+        "user_id": user["_id"],
+        "email": user["email"],
+        "session_id": session.session_id,
+        "amount": PRO_PRICE,
+        "currency": "usd",
+        "payment_status": "pending",
+        "plan": "pro",
+        "created_at": datetime.now(timezone.utc),
+    })
+
+    return {"url": session.url, "session_id": session.session_id}
+
+
+@app.get("/api/stripe/status/{session_id}")
+async def checkout_status(session_id: str, request: Request, user: dict = Depends(get_current_user)):
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
+
+    # Update transaction
+    txn = await db.payment_transactions.find_one({"session_id": session_id})
+    if txn and txn.get("payment_status") != "paid":
+        new_status = status.payment_status
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$set": {"payment_status": new_status, "status": status.status, "updated_at": datetime.now(timezone.utc)}}
+        )
+        # Upgrade user tier on successful payment
+        if new_status == "paid":
+            await db.users.update_one(
+                {"_id": ObjectId(txn["user_id"])},
+                {"$set": {"tier": "pro", "updated_at": datetime.now(timezone.utc)}}
+            )
+
+    return {
+        "status": status.status,
+        "payment_status": status.payment_status,
+        "amount_total": status.amount_total,
+        "currency": status.currency,
+    }
+
+
+@app.post("/api/webhook/stripe")
+async def stripe_webhook(request: Request):
+    body = await request.body()
+    sig = request.headers.get("Stripe-Signature", "")
+    host_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{host_url}/api/webhook/stripe"
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+    try:
+        webhook_response = await stripe_checkout.handle_webhook(body, sig)
+        if webhook_response.payment_status == "paid":
+            metadata = webhook_response.metadata or {}
+            user_id = metadata.get("user_id")
+            if user_id:
+                # Update transaction
+                await db.payment_transactions.update_one(
+                    {"session_id": webhook_response.session_id},
+                    {"$set": {"payment_status": "paid", "updated_at": datetime.now(timezone.utc)}}
+                )
+                # Upgrade tier
+                await db.users.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$set": {"tier": "pro", "updated_at": datetime.now(timezone.utc)}}
+                )
+        return {"received": True}
+    except Exception as e:
+        print(f"[stripe-webhook] error: {e}")
+        return {"received": True, "error": str(e)}
+
+
+@app.get("/api/stripe/subscription")
+async def get_subscription(user: dict = Depends(get_current_user)):
+    """Get current user's subscription status"""
+    txn = await db.payment_transactions.find_one(
+        {"user_id": user["_id"], "payment_status": "paid"},
+        sort=[("created_at", -1)]
+    )
+    return {
+        "tier": user.get("tier", "free"),
+        "is_pro": user.get("tier") == "pro",
+        "price_display": "$4.14/mo",
+        "last_payment": serialize_doc(txn) if txn else None,
+    }
+
+
 # ===================== HEALTH =====================
 
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "service": "mkepulse-api", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+# ===================== STARTUP =====================
+
+@app.on_event("startup")
+async def startup():
+    await seed_data()
+    # Start background realtime simulation
+    asyncio.create_task(simulate_realtime_updates())
+
+# Replace app with socket.io wrapped app for uvicorn
+app = sio_asgi

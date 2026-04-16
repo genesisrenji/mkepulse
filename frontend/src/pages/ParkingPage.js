@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import API from '../api';
-import { Car, Clock, DollarSign, Navigation, Star } from 'lucide-react';
+import { useSocket, useSocketConnect } from '../hooks/useSocket';
+import { Car, Clock, DollarSign, Navigation, Star, Wifi } from 'lucide-react';
 
 export default function ParkingPage() {
   const [garages, setGarages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem('mkepulse_token');
+
+  useSocketConnect(token);
 
   useEffect(() => {
     const load = async () => {
@@ -17,12 +21,31 @@ export default function ParkingPage() {
     load();
   }, []);
 
+  // Live parking updates via Socket.io
+  useSocket('parking:update', (data) => {
+    if (!data?.garages) return;
+    setGarages(prev => prev.map(g => {
+      const update = data.garages.find(u => u.id === g.id);
+      if (update) {
+        const newAvail = update.available_spaces;
+        const fillPct = g.total_spaces > 0 ? Math.round(((g.total_spaces - newAvail) / g.total_spaces) * 100) : 0;
+        return { ...g, available_spaces: newAvail, status: update.status, fill_pct: fillPct };
+      }
+      return g;
+    }));
+  });
+
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading parking...</div>;
 
   return (
     <div data-testid="parking-page">
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--navy)', letterSpacing: '-0.02em' }}>Parking</h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--navy)', letterSpacing: '-0.02em' }}>Parking</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--gold)', fontWeight: 600 }}>
+            <Wifi size={14} /> Live updates
+          </div>
+        </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginTop: 4 }}>{garages.length} garages in Milwaukee</p>
       </div>
 
@@ -59,7 +82,6 @@ export default function ParkingPage() {
                 </div>
               </div>
 
-              {/* Fill Bar */}
               <div style={{ marginTop: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{g.available_spaces} of {g.total_spaces} available</span>
@@ -73,7 +95,6 @@ export default function ParkingPage() {
                 </div>
               </div>
 
-              {/* Info Row */}
               <div style={{ display: 'flex', gap: 20, marginTop: 12, color: 'var(--text-secondary)', fontSize: 12 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <DollarSign size={13} /> ${((g.hourly_rate_cents || 0) / 100).toFixed(2)}/hr

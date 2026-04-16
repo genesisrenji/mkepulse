@@ -1,8 +1,11 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
+import { ToastProvider } from './components/Toast';
 import AuthPage from './pages/AuthPage';
 import OnboardingQuiz from './pages/OnboardingQuiz';
+import PaywallPage from './pages/PaywallPage';
+import SubscribeSuccess from './pages/SubscribeSuccess';
 import UserLayout from './components/UserLayout';
 import AdminLayout from './components/AdminLayout';
 import FeedPage from './pages/FeedPage';
@@ -53,6 +56,9 @@ function AppRoutes() {
     <Routes>
       <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthPage />} />
       <Route path="/onboarding" element={<ProtectedRoute><OnboardingQuiz /></ProtectedRoute>} />
+      <Route path="/subscribe" element={<ProtectedRoute><PaywallPage /></ProtectedRoute>} />
+      <Route path="/subscribe/success" element={<ProtectedRoute><SubscribeSuccess /></ProtectedRoute>} />
+      <Route path="/subscribe/cancel" element={<Navigate to="/subscribe" replace />} />
 
       {/* User routes */}
       <Route path="/" element={<ProtectedRoute><UserLayout /></ProtectedRoute>}>
@@ -83,7 +89,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import API from '../api';
-import { Bell, AlertTriangle, Info, CheckCircle, Clock } from 'lucide-react';
+import { useSocket, useSocketConnect } from '../hooks/useSocket';
+import { useToast } from '../components/Toast';
+import { Bell, AlertTriangle, Info, CheckCircle, Clock, Wifi } from 'lucide-react';
 
 const SEVERITY_CONFIG = {
   critical: { icon: AlertTriangle, color: '#ef4444', bg: '#fef2f2' },
@@ -11,6 +13,10 @@ const SEVERITY_CONFIG = {
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
+  const token = localStorage.getItem('mkepulse_token');
+
+  useSocketConnect(token);
 
   useEffect(() => {
     const load = async () => {
@@ -23,12 +29,30 @@ export default function AlertsPage() {
     load();
   }, []);
 
+  // Live alert updates
+  useSocket('alert:new', (data) => {
+    if (data?.alert) {
+      setAlerts(prev => [data.alert, ...prev]);
+      addToast({
+        type: data.alert.severity === 'critical' ? 'capacity' : 'event',
+        title: data.alert.title,
+        description: data.alert.description,
+        duration: 6000,
+      });
+    }
+  });
+
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading alerts...</div>;
 
   return (
     <div data-testid="alerts-page">
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--navy)', letterSpacing: '-0.02em' }}>Alerts</h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--navy)', letterSpacing: '-0.02em' }}>Alerts</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--gold)', fontWeight: 600 }}>
+            <Wifi size={14} /> Live
+          </div>
+        </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginTop: 4 }}>{alerts.length} alerts</p>
       </div>
 
@@ -39,7 +63,7 @@ export default function AlertsPage() {
           const time = alert.created_at ? new Date(alert.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
           return (
-            <div key={alert.id} data-testid={`alert-card-${i}`} className="animate-fade-in-up"
+            <div key={alert.id || i} data-testid={`alert-card-${i}`} className="animate-fade-in-up"
               style={{
                 background: 'white', borderRadius: 12, border: '1px solid var(--user-border)',
                 padding: '16px 20px', display: 'flex', gap: 14, alignItems: 'flex-start',

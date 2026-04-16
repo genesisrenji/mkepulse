@@ -1,24 +1,68 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import API from '../api';
-import { MapPin, Users, Car, Clock, Zap, Star, TrendingUp } from 'lucide-react';
+import { useAuth } from '../components/AuthContext';
+import { useSocket, useSocketConnect } from '../hooks/useSocket';
+import { useGeolocation } from '../hooks/useGeolocation';
+import { useToast } from '../components/Toast';
+import { MapPin, Users, Car, Clock, Zap } from 'lucide-react';
 
 export default function FeedPage() {
   const [feed, setFeed] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const isPro = user?.tier === 'pro';
+  const token = localStorage.getItem('mkepulse_token');
 
-  useEffect(() => {
-    const fetchFeed = async () => {
-      try {
-        const { data } = await API.get('/api/feed');
-        setFeed(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFeed();
+  // Connect socket
+  useSocketConnect(token);
+
+  // Geo tracking for pro users
+  useGeolocation(isPro);
+
+  const fetchFeed = useCallback(async () => {
+    try {
+      const { data } = await API.get('/api/feed');
+      setFeed(data);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { fetchFeed(); }, [fetchFeed]);
+
+  // Socket.io: live capacity updates
+  useSocket('event:capacity_update', (data) => {
+    setFeed(prev => {
+      if (!prev) return prev;
+      const events = prev.events.map(e =>
+        e.id === data.id ? { ...e, capacity_pct: data.capacity_pct, crowd_count: data.crowd_count } : e
+      );
+      return { ...prev, events };
+    });
+  });
+
+  // Socket.io: new event
+  useSocket('event:new', (data) => {
+    if (data?.event) {
+      setFeed(prev => {
+        if (!prev) return prev;
+        return { ...prev, events: [data.event, ...prev.events] };
+      });
+      addToast({ type: 'event', title: 'New Event', description: data.event.title, duration: 5000 });
+    }
+  });
+
+  // Socket.io: proximity alert
+  useSocket('geo:proximity_alert', (data) => {
+    const event = data?.event;
+    const parking = data?.nearest_parking;
+    addToast({
+      type: 'proximity',
+      title: `You're near ${event?.venue_name || 'an event'}`,
+      description: `${event?.title || ''} — ${data?.distance_mi || '?'} mi away${parking ? `. Parking: ${parking.name} (${parking.available_spaces} spots)` : ''}`,
+      duration: 8000,
+    });
+  });
 
   if (loading) return <div data-testid="feed-loading" style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading events...</div>;
 
@@ -31,9 +75,17 @@ export default function FeedPage() {
         <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginTop: 4 }}>
           {events.length} events near you {feed?.meta?.is_pro ? '' : `(${feed?.meta?.free_limit} max, free tier)`}
         </p>
+        {!isPro && (
+          <a href="/subscribe" data-testid="feed-upgrade-link" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8,
+            padding: '6px 14px', borderRadius: 8, background: 'rgba(196,151,59,0.1)',
+            color: 'var(--gold)', fontSize: 12, fontWeight: 700, textDecoration: 'none',
+          }}>
+            <Zap size={12} /> Upgrade to Pro for unlimited events
+          </a>
+        )}
       </div>
 
-      {/* Section Headers */}
       {feed?.sections?.nearby?.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -75,7 +127,6 @@ function EventCard({ event, index }) {
       onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(14,34,64,0.08)'; }}
       onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(14,34,64,0.04)'; }}>
 
-      {/* Top Row: Title + Badges */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
@@ -95,9 +146,7 @@ function EventCard({ event, index }) {
         </div>
       </div>
 
-      {/* Bottom Row: Capacity + Parking */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--user-border)' }}>
-        {/* Capacity */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
@@ -111,7 +160,6 @@ function EventCard({ event, index }) {
           </div>
         </div>
 
-        {/* Parking */}
         <div>
           {event.nearest_parking ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
