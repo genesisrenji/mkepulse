@@ -4,10 +4,12 @@
 Build MKEpulse: a full-stack real-time Milwaukee events platform with Milwaukee Brewers-inspired branding.
 
 ## Architecture
-- **Backend:** FastAPI (Python) + MongoDB
-- **Frontend:** React (CRA) + Leaflet + Recharts
+- **Backend:** FastAPI (Python) + MongoDB + python-socketio
+- **Frontend:** React (CRA) + Leaflet + Recharts + socket.io-client
 - **Auth:** JWT-based with bcrypt password hashing
-- **Database:** MongoDB with collections: users, events, parking_garages, alerts, user_preferences, crawl_runs
+- **Payments:** Stripe via emergentintegrations library
+- **Real-time:** Socket.io (python-socketio ASGI wrapper)
+- **Database:** MongoDB with collections: users, events, parking_garages, alerts, user_preferences, crawl_runs, payment_transactions
 
 ## User Personas
 1. **Event-goer (Free):** Browses up to 8 events, sees parking info, basic alerts
@@ -16,59 +18,63 @@ Build MKEpulse: a full-stack real-time Milwaukee events platform with Milwaukee 
 
 ## Core Requirements
 - Two user roles: user and admin
-- Onboarding quiz (6 steps): categories, budget, neighborhoods, group/age, notifications, name/email
+- Onboarding quiz (6 steps)
 - Event feed with scoring, capacity bars, parking info
 - Map view (Leaflet/OpenStreetMap)
 - Parking availability screen
-- Alerts screen (capacity, proximity, flash deals)
-- Admin portal (dark mode): Dashboard, Users, Events, Alerts, Parking, AI Agent, Revenue
+- Alerts screen
+- Admin portal (dark mode)
+- Geo proximity alerts (Pro only)
+- Real-time Socket.io updates
+- Stripe subscription ($4.14/mo)
 
-## What's Been Implemented (April 13, 2026)
-### Phase 1 MVP - COMPLETE
+## What's Been Implemented
+
+### Phase 1 MVP (April 13, 2026) - COMPLETE
 - [x] JWT authentication (login/register/logout)
-- [x] Admin seeding (admin@mkepulse.com)
+- [x] Admin seeding + test users (free/pro)
 - [x] 6-step onboarding quiz
-- [x] Event feed with scoring pipeline (relevance scoring, section classification)
-- [x] 8 seed events with real Milwaukee venues
-- [x] 6 seed parking garages with real Milwaukee addresses
-- [x] Parking page with fill bars, status, rates
-- [x] Map page with Leaflet (event pins + parking pins + radius ring)
+- [x] Event feed with scoring pipeline
+- [x] 8 seed events, 6 seed parking garages
+- [x] Parking page with fill bars
+- [x] Map page with Leaflet
 - [x] Alerts page
 - [x] Profile/settings page
-- [x] Full admin portal (Dashboard, Users, Events, Alerts, Parking, AI Agent, Revenue)
-- [x] Admin charts (user growth, source breakdown, category engagement, MRR)
-- [x] Milwaukee Brewers design (navy #0E2240, gold #C4973B, cream #FDFAF4)
-- [x] Dark admin portal (navy #0A0F1A, gold accents)
-- [x] Responsive layout with dark navy sidebar
+- [x] Full admin portal (7 sections)
+- [x] Milwaukee Brewers design
+
+### Phase 2 (April 16, 2026) - COMPLETE
+- [x] Geo Proximity Alerts (POST /api/geo/update, Haversine, Pro-only)
+- [x] Socket.io real-time updates (capacity, parking, new events, alerts)
+- [x] Background simulation task (30s interval)
+- [x] Stripe subscription checkout ($4.14/mo via emergentintegrations)
+- [x] Paywall page (/subscribe) with feature list
+- [x] Checkout success page with polling
+- [x] Stripe webhook handler
+- [x] Profile upgrade button
+- [x] Feed "Upgrade to Pro" link
+- [x] Toast notification system for proximity/capacity/parking alerts
+- [x] Geolocation hook (navigator.geolocation.watchPosition)
 
 ### Testing Results
-- Backend: 100% (16/16 tests passed)
-- Frontend: 95%
-- Integration: 100%
-- Admin Portal: 100%
+- Backend: 100% (23/23 tests passed)
+- Frontend: Functional (login, feed, paywall, profile, admin all verified via screenshots)
 
 ## Prioritized Backlog
 
-### P0 (Next)
-- Stripe payment integration ($4.14/mo Pro tier)
-- Real-time Socket.io updates (event:new, capacity updates, parking updates)
-
 ### P1
-- Geo alerts (navigator.geolocation.watchPosition for Pro users)
-- Google Maps integration (deferred to Leaflet currently)
-- AI crawl agent (currently mocked with seed data)
+- Onboarding quiz → paywall flow (redirect new users to /subscribe after quiz)
+- Push notification implementation
+- Advanced filters for Pro users (category, neighborhood, price range)
 
 ### P2
-- Apple Pay / Google Pay via Stripe
-- Notification frequency implementation
 - User event interactions (save, checkin, dismiss)
-- Advanced filters for Pro users
 - Flash deal countdown timers
+- Password reset flow
+- Email notifications via SendGrid
 
-## Deferred / Future
-- Supabase migration (currently using MongoDB + JWT)
+### Future
 - External API integrations (Ticketmaster, Eventbrite, Instagram)
 - Milwaukee Open Data API parking polling
+- Supabase migration
 - Railway/Vercel deployment
-- Password reset flow
-- Email notifications
