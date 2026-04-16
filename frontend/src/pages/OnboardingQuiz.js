@@ -72,7 +72,7 @@ export default function OnboardingQuiz() {
     setSaving(true);
     try {
       await API.post('/api/preferences', answers);
-      navigate('/');
+      navigate('/subscribe');
     } catch (err) {
       console.error(err);
     } finally {

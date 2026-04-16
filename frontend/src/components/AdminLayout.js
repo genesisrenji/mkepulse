@@ -1,16 +1,18 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { LayoutDashboard, Users, Calendar, Bell, Car, Bot, DollarSign, ArrowLeft } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Bell, Car, Bot, DollarSign, ArrowLeft, BarChart3, Settings } from 'lucide-react';
 
 const ADMIN_NAV = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
+  { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/admin/users', icon: Users, label: 'Users' },
   { to: '/admin/events', icon: Calendar, label: 'Events' },
   { to: '/admin/alerts', icon: Bell, label: 'Alerts' },
   { to: '/admin/parking', icon: Car, label: 'Parking' },
   { to: '/admin/agent', icon: Bot, label: 'AI Agent' },
   { to: '/admin/revenue', icon: DollarSign, label: 'Revenue' },
+  { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
 export default function AdminLayout() {

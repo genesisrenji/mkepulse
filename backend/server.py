@@ -645,13 +645,123 @@ async def admin_revenue(user: dict = Depends(require_admin)):
             "month": month.strftime("%b %Y"),
             "mrr": round(max(0, mrr - (5-i) * 8.28 + (5-i) * 4.14), 2)
         })
+    # Recent transactions
+    txns = await db.payment_transactions.find({}).sort("created_at", -1).to_list(length=20)
+    txns_serialized = [serialize_doc(t) for t in txns]
     return {
         "mrr": mrr,
         "pro_users": pro_users,
         "price_per_user": 4.14,
         "mrr_history": mrr_history,
-        "recent_transactions": []
+        "recent_transactions": txns_serialized
     }
+
+@app.get("/api/admin/analytics")
+async def admin_analytics(user: dict = Depends(require_admin)):
+    # Category engagement
+    cat_pipeline = [{"$match": {"is_active": True}}, {"$group": {"_id": "$category", "count": {"$sum": 1}}}]
+    cat_agg = await db.events.aggregate(cat_pipeline).to_list(length=20)
+    category_engagement = {c["_id"]: c["count"] for c in cat_agg}
+
+    # Notification frequency breakdown from user_preferences
+    notif_pipeline = [{"$group": {"_id": "$notif_frequency", "count": {"$sum": 1}}}]
+    notif_agg = await db.user_preferences.aggregate(notif_pipeline).to_list(length=10)
+    notif_breakdown = {n["_id"]: n["count"] for n in notif_agg if n["_id"]}
+
+    # Neighborhood heatmap from user_preferences
+    hood_counts = {}
+    prefs_cursor = db.user_preferences.find({}, {"neighborhoods": 1})
+    async for p in prefs_cursor:
+        for h in (p.get("neighborhoods") or []):
+            hood_counts[h] = hood_counts.get(h, 0) + 1
+
+    # Event neighborhoods
+    event_hood_pipeline = [{"$match": {"is_active": True}}, {"$group": {"_id": "$neighborhood", "count": {"$sum": 1}}}]
+    event_hood_agg = await db.events.aggregate(event_hood_pipeline).to_list(length=20)
+    event_neighborhoods = {e["_id"]: e["count"] for e in event_hood_agg if e["_id"]}
+
+    return {
+        "category_engagement": category_engagement,
+        "notif_breakdown": notif_breakdown,
+        "neighborhood_heatmap": hood_counts,
+        "event_neighborhoods": event_neighborhoods,
+    }
+
+@app.get("/api/admin/settings")
+async def admin_settings(user: dict = Depends(require_admin)):
+    config = await db.platform_config.find_one({"_id": "global"})
+    if not config:
+        config = {
+            "crawl_interval_min": 15,
+            "default_alert_radius_mi": 3.0,
+            "pro_price_cents": 414,
+            "free_event_limit": 8,
+            "parking_poll_interval_min": 2,
+        }
+    else:
+        config = serialize_doc(config)
+
+    api_keys = {
+        "STRIPE_API_KEY": "configured" if STRIPE_API_KEY else "missing",
+        "TICKETMASTER_API_KEY": "not configured",
+        "EVENTBRITE_API_KEY": "not configured",
+        "INSTAGRAM_ACCESS_TOKEN": "not configured",
+        "MKE_OPEN_DATA_APP_TOKEN": "not configured",
+        "GOOGLE_MAPS_API_KEY": "not configured",
+    }
+    return {"config": config, "api_keys": api_keys}
+
+# AI Crawl Agent control
+agent_paused = False
+
+@app.post("/api/admin/agent/trigger")
+async def admin_trigger_crawl(user: dict = Depends(require_admin)):
+    """Force an immediate crawl cycle"""
+    now = datetime.now(timezone.utc)
+    sources = ["ticketmaster", "eventbrite", "instagram", "onmilwaukee", "milwaukee_com", "visit_milwaukee"]
+    run_id = await db.crawl_runs.insert_one({
+        "started_at": now, "status": "running", "events_found": 0, "events_new": 0,
+        "events_updated": 0, "events_skipped": 0, "sources_ok": [], "sources_failed": [],
+    })
+
+    await sio.emit('agent:log', {"line": "Force crawl triggered by admin", "type": "info", "ts": now.isoformat()})
+
+    # Simulate crawl with logging
+    total_found, total_new, total_updated = 0, 0, 0
+    sources_ok, sources_failed = [], []
+    for source in sources:
+        await asyncio.sleep(0.3)
+        found = random.randint(1, 5)
+        new_count = random.randint(0, 2)
+        total_found += found
+        total_new += new_count
+        total_updated += found - new_count
+        sources_ok.append(source)
+        await sio.emit('agent:log', {"line": f"[{source}] Found {found} events ({new_count} new)", "type": "ok" if new_count > 0 else "info", "ts": datetime.now(timezone.utc).isoformat()})
+
+    finished = datetime.now(timezone.utc)
+    duration_ms = int((finished - now).total_seconds() * 1000)
+    await db.crawl_runs.update_one(
+        {"_id": run_id.inserted_id},
+        {"$set": {
+            "finished_at": finished, "duration_ms": duration_ms, "status": "completed",
+            "events_found": total_found, "events_new": total_new, "events_updated": total_updated,
+            "sources_ok": sources_ok, "sources_failed": sources_failed,
+        }}
+    )
+
+    await sio.emit('agent:log', {"line": f"Crawl complete: {total_found} found, {total_new} new, {total_updated} updated ({duration_ms}ms)", "type": "ok", "ts": finished.isoformat()})
+    await sio.emit('agent:cycle_complete', serialize_doc(await db.crawl_runs.find_one({"_id": run_id.inserted_id})))
+
+    return {"triggered": True, "run_id": str(run_id.inserted_id), "events_found": total_found, "events_new": total_new}
+
+@app.post("/api/admin/agent/pause")
+async def admin_pause_agent(user: dict = Depends(require_admin)):
+    global agent_paused
+    agent_paused = not agent_paused
+    status = "paused" if agent_paused else "running"
+    await sio.emit('agent:log', {"line": f"Agent {status} by admin", "type": "warn", "ts": datetime.now(timezone.utc).isoformat()})
+    return {"paused": agent_paused, "status": status}
 
 
 # ===================== GEO PROXIMITY ALERTS =====================

@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { Zap, Map, Car, Bell, User, LogOut, Menu, X, Shield } from 'lucide-react';
+import { Zap, Map, Car, Bell, User, LogOut, Menu, X, Shield, Lock, Crown } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { to: '/', icon: Zap, label: 'Feed', end: true },
-  { to: '/map', icon: Map, label: 'Map' },
-  { to: '/parking', icon: Car, label: 'Parking' },
-  { to: '/alerts', icon: Bell, label: 'Alerts' },
-  { to: '/profile', icon: User, label: 'Profile' },
+  { to: '/', icon: Zap, label: 'Feed', end: true, proOnly: false },
+  { to: '/map', icon: Map, label: 'Map', proOnly: true },
+  { to: '/parking', icon: Car, label: 'Parking', proOnly: true },
+  { to: '/alerts', icon: Bell, label: 'Alerts', proOnly: false },
+  { to: '/profile', icon: User, label: 'Profile', proOnly: false },
 ];
 
 export default function UserLayout() {
@@ -16,8 +16,16 @@ export default function UserLayout() {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+  const isPro = user?.tier === 'pro';
 
   const handleLogout = async () => { await logout(); navigate('/auth'); };
+
+  const handleNavClick = (e, item) => {
+    if (item.proOnly && !isPro) {
+      e.preventDefault();
+      navigate('/subscribe');
+    }
+  };
 
   return (
     <div data-testid="user-layout" style={{ display: 'flex', minHeight: '100vh' }}>
@@ -30,22 +38,29 @@ export default function UserLayout() {
           <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>
             MKE<span style={{ color: 'var(--gold)' }}>pulse</span>
           </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
-            {user?.tier === 'pro' ? 'Pro Member' : 'Free Tier'}
+          <div style={{ fontSize: 11, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.15em', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {isPro ? (
+              <span style={{ color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 4 }}><Crown size={12} /> Pro Member</span>
+            ) : (
+              <span style={{ color: 'rgba(255,255,255,0.5)' }}>Free Tier</span>
+            )}
           </div>
         </div>
 
         <nav style={{ flex: 1, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {NAV_ITEMS.map(item => (
             <NavLink key={item.to} to={item.to} end={item.end} data-testid={`nav-${item.label.toLowerCase()}`}
+              onClick={(e) => handleNavClick(e, item)}
               style={({ isActive }) => ({
                 display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10,
                 color: isActive ? 'white' : 'rgba(255,255,255,0.6)', textDecoration: 'none',
                 background: isActive ? 'rgba(196,151,59,0.15)' : 'transparent',
                 fontWeight: isActive ? 700 : 500, fontSize: 14, transition: 'all 0.2s',
+                opacity: (item.proOnly && !isPro) ? 0.5 : 1,
               })}>
               <item.icon size={18} />
-              {item.label}
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.proOnly && !isPro && <Lock size={12} style={{ opacity: 0.5 }} />}
             </NavLink>
           ))}
 
@@ -62,6 +77,16 @@ export default function UserLayout() {
         </nav>
 
         <div style={{ padding: '12px 10px 20px' }}>
+          {!isPro && (
+            <button data-testid="sidebar-upgrade" onClick={() => navigate('/subscribe')}
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: 10, border: 'none',
+                background: 'var(--gold)', color: 'var(--admin-bg)', fontWeight: 700, fontSize: 13,
+                cursor: 'pointer', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
+              <Zap size={14} /> Upgrade to Pro
+            </button>
+          )}
           <div style={{ padding: '10px 14px', fontSize: 13, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user?.name || user?.email}
           </div>
@@ -87,20 +112,18 @@ export default function UserLayout() {
         </button>
       </div>
 
-      {/* Mobile Nav */}
       {mobileOpen && (
-        <div style={{
-          position: 'fixed', top: 52, left: 0, right: 0, bottom: 0, background: 'var(--navy)', zIndex: 49, padding: 16,
-        }}>
+        <div style={{ position: 'fixed', top: 52, left: 0, right: 0, bottom: 0, background: 'var(--navy)', zIndex: 49, padding: 16 }}>
           {NAV_ITEMS.map(item => (
             <NavLink key={item.to} to={item.to} end={item.end}
-              onClick={() => setMobileOpen(false)}
+              onClick={(e) => { handleNavClick(e, item); setMobileOpen(false); }}
               style={({ isActive }) => ({
                 display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 10,
                 color: isActive ? 'white' : 'rgba(255,255,255,0.6)', textDecoration: 'none',
                 fontWeight: isActive ? 700 : 500, fontSize: 15,
               })}>
               <item.icon size={20} /> {item.label}
+              {item.proOnly && !isPro && <Lock size={12} style={{ opacity: 0.5, marginLeft: 'auto' }} />}
             </NavLink>
           ))}
         </div>

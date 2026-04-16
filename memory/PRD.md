@@ -9,72 +9,77 @@ Build MKEpulse: a full-stack real-time Milwaukee events platform with Milwaukee 
 - **Auth:** JWT-based with bcrypt password hashing
 - **Payments:** Stripe via emergentintegrations library
 - **Real-time:** Socket.io (python-socketio ASGI wrapper)
-- **Database:** MongoDB with collections: users, events, parking_garages, alerts, user_preferences, crawl_runs, payment_transactions
+- **Database:** MongoDB
 
-## User Personas
-1. **Event-goer (Free):** Browses up to 8 events, sees parking info, basic alerts
-2. **Event-goer (Pro):** Unlimited events, geo alerts, AI picks, advanced filters ($4.14/mo)
-3. **Admin:** Full platform management, user analytics, event approvals, revenue tracking
+## Build Guide Checklist Status
 
-## Core Requirements
-- Two user roles: user and admin
-- Onboarding quiz (6 steps)
-- Event feed with scoring, capacity bars, parking info
-- Map view (Leaflet/OpenStreetMap)
-- Parking availability screen
-- Alerts screen
-- Admin portal (dark mode)
-- Geo proximity alerts (Pro only)
-- Real-time Socket.io updates
-- Stripe subscription ($4.14/mo)
+### Phase 1 — Foundation ✅
+- [x] Database schema (MongoDB collections mirror Supabase schema)
+- [x] Seed data (6 garages, 8 events)
+- [x] Auth configured (JWT + bcrypt, admin/user/superadmin roles)
+- [x] Test users seeded (admin, free, pro)
 
-## What's Been Implemented
+### Phase 2 — Payments & Onboarding ✅
+- [x] Stripe $4.14/mo checkout via emergentintegrations
+- [x] Stripe webhook handler (/api/webhook/stripe)
+- [x] profiles.tier syncs on payment
+- [x] 6-step onboarding quiz → writes to user_preferences
+- [x] Paywall screen renders after quiz (/subscribe)
+- [x] Quiz → Paywall redirect flow
 
-### Phase 1 MVP (April 13, 2026) - COMPLETE
-- [x] JWT authentication (login/register/logout)
-- [x] Admin seeding + test users (free/pro)
-- [x] 6-step onboarding quiz
-- [x] Event feed with scoring pipeline
-- [x] 8 seed events, 6 seed parking garages
-- [x] Parking page with fill bars
-- [x] Map page with Leaflet
-- [x] Alerts page
-- [x] Profile/settings page
-- [x] Full admin portal (7 sections)
-- [x] Milwaukee Brewers design
+### Phase 3 — User App ✅
+- [x] Event feed with geo-sorted cards
+- [x] Capacity bars color-coded (green/gold/red)
+- [x] Parking strip on cards (Pro only gate)
+- [x] Socket.io: event:new, event:capacity_update working
+- [x] Geolocation watchPosition for Pro users
+- [x] Proximity toast with parking info
+- [x] Parking screen with live Socket.io updates
+- [x] Geo map screen (Leaflet) with venue + parking pins + radius ring
+- [x] Free-tier gates enforced (Map locked, Parking locked, parking strips Pro only, 8-event cap, upgrade CTAs)
 
-### Phase 2 (April 16, 2026) - COMPLETE
-- [x] Geo Proximity Alerts (POST /api/geo/update, Haversine, Pro-only)
-- [x] Socket.io real-time updates (capacity, parking, new events, alerts)
-- [x] Background simulation task (30s interval)
-- [x] Stripe subscription checkout ($4.14/mo via emergentintegrations)
-- [x] Paywall page (/subscribe) with feature list
-- [x] Checkout success page with polling
-- [x] Stripe webhook handler
-- [x] Profile upgrade button
-- [x] Feed "Upgrade to Pro" link
-- [x] Toast notification system for proximity/capacity/parking alerts
-- [x] Geolocation hook (navigator.geolocation.watchPosition)
+### Phase 4 — Admin Portal ✅
+- [x] /admin gated behind role check
+- [x] All 9 admin sections: Dashboard, Analytics, Users, Events, Alerts, Parking, AI Agent, Revenue, Settings
+- [x] Analytics: category engagement, notification frequency, neighborhood heatmap
+- [x] AI Agent: force crawl button → POST /api/admin/agent/trigger (working)
+- [x] AI Agent: pause button → POST /api/admin/agent/pause (working)
+- [x] AI Agent: live crawl log via Socket.io agent:log
+- [x] AI Agent: agent:cycle_complete updates run list
+- [x] Settings: platform config table + API key status
+- [x] Alerts badge count accurate
+- [x] Revenue pulling from payment_transactions
 
-### Testing Results
-- Backend: 100% (23/23 tests passed)
-- Frontend: Functional (login, feed, paywall, profile, admin all verified via screenshots)
+### Phase 5 — Deployment
+- [ ] Frontend to Vercel
+- [ ] Server to Railway
+- [ ] Stripe webhook production URL
+- [ ] End-to-end smoke test in production
 
-## Prioritized Backlog
+## Socket.io Events Implemented
+| Event | Status |
+|-------|--------|
+| event:new | ✅ |
+| event:capacity_update | ✅ |
+| geo:proximity_alert | ✅ |
+| parking:update | ✅ |
+| alert:new | ✅ |
+| agent:log | ✅ |
+| agent:cycle_complete | ✅ |
 
-### P1
-- Onboarding quiz → paywall flow (redirect new users to /subscribe after quiz)
-- Push notification implementation
-- Advanced filters for Pro users (category, neighborhood, price range)
+## Pro Tier Gates Implemented
+| Feature | Gate |
+|---------|------|
+| Event feed (8 max) | ✅ Free capped |
+| Map screen | ✅ Locked → /subscribe |
+| Parking screen | ✅ Locked → /subscribe |
+| Parking on feed cards | ✅ Shows "Parking info (Pro)" |
+| Geo proximity alerts | ✅ Pro only |
+| Sidebar upgrade CTA | ✅ Shows for free users |
+| Lock icons on nav | ✅ Map/Parking |
 
-### P2
-- User event interactions (save, checkin, dismiss)
-- Flash deal countdown timers
-- Password reset flow
-- Email notifications via SendGrid
-
-### Future
-- External API integrations (Ticketmaster, Eventbrite, Instagram)
-- Milwaukee Open Data API parking polling
-- Supabase migration
-- Railway/Vercel deployment
+## Remaining Backlog
+- External API integrations (Ticketmaster, Eventbrite, Instagram) — needs API keys
+- Milwaukee Open Data API polling — needs app token
+- Advanced Pro filters UI (budget, neighborhood, age, group sliders)
+- Vercel/Railway deployment

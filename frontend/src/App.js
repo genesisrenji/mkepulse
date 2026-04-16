@@ -20,6 +20,8 @@ import AdminAlerts from './pages/admin/AdminAlerts';
 import AdminParking from './pages/admin/AdminParking';
 import AdminAgent from './pages/admin/AdminAgent';
 import AdminRevenue from './pages/admin/AdminRevenue';
+import AdminAnalytics from './pages/admin/AdminAnalytics';
+import AdminSettings from './pages/admin/AdminSettings';
 import './App.css';
 
 function ProtectedRoute({ children }) {
@@ -78,6 +80,8 @@ function AppRoutes() {
         <Route path="parking" element={<AdminParking />} />
         <Route path="agent" element={<AdminAgent />} />
         <Route path="revenue" element={<AdminRevenue />} />
+        <Route path="analytics" element={<AdminAnalytics />} />
+        <Route path="settings" element={<AdminSettings />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

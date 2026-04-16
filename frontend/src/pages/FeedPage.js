@@ -97,7 +97,7 @@ export default function FeedPage() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {events.map((event, i) => (
-          <EventCard key={event.id} event={event} index={i} />
+          <EventCard key={event.id} event={event} index={i} isPro={isPro} />
         ))}
       </div>
 
@@ -112,7 +112,7 @@ export default function FeedPage() {
   );
 }
 
-function EventCard({ event, index }) {
+function EventCard({ event, index, isPro }) {
   const capColor = (event.capacity_pct || 0) >= 90 ? 'cap-red' : (event.capacity_pct || 0) >= 60 ? 'cap-gold' : 'cap-green';
   const startTime = event.starts_at ? new Date(event.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
   const priceLabel = (!event.price_min || event.price_min === 0) ? 'Free' : `$${event.price_min}${event.price_max && event.price_max !== event.price_min ? '-$' + event.price_max : ''}`;
@@ -161,7 +161,7 @@ function EventCard({ event, index }) {
         </div>
 
         <div>
-          {event.nearest_parking ? (
+          {isPro && event.nearest_parking ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Car size={14} color="var(--text-secondary)" />
               <div>
@@ -171,6 +171,10 @@ function EventCard({ event, index }) {
                 </div>
               </div>
             </div>
+          ) : !isPro ? (
+            <a href="/subscribe" style={{ fontSize: 12, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', fontWeight: 600 }}>
+              <Car size={14} /> Parking info (Pro)
+            </a>
           ) : (
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
               <Car size={14} /> No nearby parking data
