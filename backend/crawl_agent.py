@@ -125,41 +125,48 @@ async def fetch_eventbrite():
     events = []
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                "https://www.eventbriteapi.com/v3/events/search/",
+            # Eventbrite deprecated public search. Try org-based approach with known MKE venue orgs.
+            # First check if user has orgs
+            org_resp = await client.get(
+                "https://www.eventbriteapi.com/v3/users/me/organizations/",
                 headers={"Authorization": f"Bearer {EVENTBRITE_API_KEY}"},
-                params={
-                    "location.latitude": str(MKE_LAT),
-                    "location.longitude": str(MKE_LNG),
-                    "location.within": f"{MKE_RADIUS}mi",
-                    "sort_by": "date",
-                    "expand": "venue",
-                }
             )
-            if resp.status_code != 200:
-                return [], f"http_{resp.status_code}"
-            data = resp.json()
-            for e in data.get("events", []):
-                venue = e.get("venue", {}) or {}
-                addr = venue.get("address", {}) or {}
-                events.append({
-                    "external_id": f"EB-{e.get('id', '')}",
-                    "source": "eventbrite",
-                    "source_url": e.get("url", ""),
-                    "title": e.get("name", {}).get("text", ""),
-                    "description": (e.get("description", {}).get("text", "") or "")[:500],
-                    "category": classify_category(e.get("name", {}).get("text", "")),
-                    "venue_name": venue.get("name", "Unknown Venue"),
-                    "address": f"{addr.get('address_1', '')}, {addr.get('city', 'Milwaukee')}, {addr.get('region', 'WI')}",
-                    "neighborhood": classify_neighborhood(addr.get("address_1", "")),
-                    "lat": float(addr.get("latitude", MKE_LAT)),
-                    "lng": float(addr.get("longitude", MKE_LNG)),
-                    "starts_at": e.get("start", {}).get("utc"),
-                    "price_min": 0.0,
-                    "price_max": None,
-                    "ai_confidence": 0.90,
-                })
-        return events, "ok"
+            if org_resp.status_code == 200:
+                orgs = org_resp.json().get("organizations", [])
+                for org in orgs:
+                    org_id = org.get("id")
+                    if not org_id:
+                        continue
+                    ev_resp = await client.get(
+                        f"https://www.eventbriteapi.com/v3/organizations/{org_id}/events/",
+                        headers={"Authorization": f"Bearer {EVENTBRITE_API_KEY}"},
+                        params={"status": "live,started", "expand": "venue", "page_size": 20}
+                    )
+                    if ev_resp.status_code != 200:
+                        continue
+                    for e in ev_resp.json().get("events", []):
+                        venue = e.get("venue", {}) or {}
+                        addr = venue.get("address", {}) or {}
+                        events.append({
+                            "external_id": f"EB-{e.get('id', '')}",
+                            "source": "eventbrite",
+                            "source_url": e.get("url", ""),
+                            "title": e.get("name", {}).get("text", ""),
+                            "description": (e.get("description", {}).get("text", "") or "")[:500],
+                            "category": classify_category(e.get("name", {}).get("text", "")),
+                            "venue_name": venue.get("name", "Milwaukee Venue"),
+                            "address": f"{addr.get('address_1', '')}, {addr.get('city', 'Milwaukee')}, {addr.get('region', 'WI')}",
+                            "neighborhood": classify_neighborhood(addr.get("address_1", "")),
+                            "lat": float(addr.get("latitude", MKE_LAT)),
+                            "lng": float(addr.get("longitude", MKE_LNG)),
+                            "starts_at": e.get("start", {}).get("utc"),
+                            "price_min": 0.0,
+                            "price_max": None,
+                            "ai_confidence": 0.88,
+                        })
+            if events:
+                return events, "ok"
+            return [], "no_events_found"
     except Exception as ex:
         return [], str(ex)[:100]
 
