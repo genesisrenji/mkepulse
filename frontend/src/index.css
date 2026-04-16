@@ -13,27 +13,38 @@
   --text-secondary: #4B5563;
   --admin-text: #FDFAF4;
   --admin-text-secondary: #9CA3AF;
+  --sidebar-width: 220px;
+  --admin-sidebar-width: 240px;
+  --mobile-header-h: 56px;
+  --mobile-tab-h: 64px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
   background: var(--cream);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--navy); border-radius: 3px; opacity: 0.3; }
+/* Touch targets: minimum 44px per Apple HIG */
+button, a, [role="button"] { min-height: 44px; }
+input, select, textarea { min-height: 44px; font-size: 16px; /* prevents iOS zoom */ }
 
-/* Animations */
+/* Scrollbar (desktop only) */
+@media (min-width: 769px) {
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--navy); border-radius: 3px; opacity: 0.3; }
+}
+
+/* ========== Animations ========== */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
@@ -50,44 +61,60 @@ body {
   0%, 100% { box-shadow: 0 0 0 0 rgba(196, 151, 59, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(196, 151, 59, 0); }
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-.animate-fade-in-up {
-  animation: fadeInUp 0.4s ease-out both;
-}
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out both;
-}
-.animate-slide-in {
-  animation: slideInRight 0.3s ease-out both;
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
-/* Capacity Bar Colors */
+.animate-fade-in-up { animation: fadeInUp 0.4s ease-out both; }
+.animate-fade-in { animation: fadeIn 0.3s ease-out both; }
+.animate-slide-in { animation: slideInRight 0.3s ease-out both; }
+
+/* ========== Capacity Bars ========== */
 .cap-green { background: #22c55e; }
 .cap-gold { background: var(--gold); }
 .cap-red { background: #ef4444; }
 
-/* Badge */
+/* ========== Badges ========== */
 .badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 .badge-live { background: #ef4444; color: white; }
 .badge-flash { background: var(--gold); color: var(--admin-bg); }
 .badge-tonight { background: var(--navy); color: white; }
-.badge-category {
-  background: rgba(14, 34, 64, 0.08);
-  color: var(--navy);
-}
-.badge-admin-category {
-  background: rgba(196, 151, 59, 0.15);
-  color: var(--gold);
-}
+.badge-category { background: rgba(14, 34, 64, 0.08); color: var(--navy); }
+.badge-admin-category { background: rgba(196, 151, 59, 0.15); color: var(--gold); }
 
 /* Leaflet fix */
 .leaflet-container { width: 100%; height: 100%; }
+
+/* ========== Responsive Grid Helpers ========== */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+@media (max-width: 1024px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+/* ========== Admin Table Responsive ========== */
+.admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.admin-table-wrap table { min-width: 600px; }
+
+/* ========== Mobile Utilities ========== */
+@media (max-width: 768px) {
+  /* Prevent horizontal scroll */
+  #root { overflow-x: hidden; }
+  /* Reduce padding on containers */
+  .page-content { padding: 16px !important; }
+}

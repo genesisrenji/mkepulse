@@ -26,7 +26,7 @@ export default function AdminRevenue() {
       <h1 style={{ fontSize: 26, fontWeight: 800, color: 'var(--admin-text)', marginBottom: 24 }}>Revenue</h1>
 
       {/* Stat Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
+      <div className="grid-3" style={{ marginBottom: 28 }}>
         <div style={cardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <DollarSign size={16} color="var(--gold)" />

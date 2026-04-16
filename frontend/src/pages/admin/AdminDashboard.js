@@ -32,7 +32,7 @@ export default function AdminDashboard() {
       <h1 style={{ fontSize: 26, fontWeight: 800, color: 'var(--admin-text)', letterSpacing: '-0.02em', marginBottom: 24 }}>Dashboard</h1>
 
       {/* Stat Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+      <div className="grid-4" style={{ marginBottom: 28 }}>
         <StatCard icon={Users} label="Total Users" value={stats.total_users} sub={`${stats.pro_users} pro`} />
         <StatCard icon={DollarSign} label="MRR" value={`$${stats.mrr}`} sub={`$4.14 x ${stats.pro_users}`} />
         <StatCard icon={Zap} label="Live Events" value={stats.live_events} sub={`${stats.total_events} total`} />
@@ -40,7 +40,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Charts Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }}>
+      <div className="grid-2" style={{ marginBottom: 28 }}>
         {/* User Growth */}
         <div style={cardStyle}>
           <h3 style={cardTitle}>User Growth (7d)</h3>

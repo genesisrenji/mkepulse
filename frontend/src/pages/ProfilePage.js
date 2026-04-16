@@ -71,7 +71,7 @@ export default function ProfilePage() {
           <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--navy)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Bell size={16} /> Preferences
           </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="grid-2">
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Categories</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>

@@ -86,7 +86,7 @@ export default function OnboardingQuiz() {
       <div>
         <h2 style={headingStyle}>What events interest you?</h2>
         <p style={subStyle}>Select all that apply</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginTop: 24 }}>
+        <div className="grid-2" style={{ marginTop: 24 }}>
           {CATEGORIES.map(c => {
             const Icon = c.icon;
             const active = answers.categories.includes(c.id);
@@ -162,7 +162,7 @@ export default function OnboardingQuiz() {
     () => (
       <div>
         <h2 style={headingStyle}>Who are you going with?</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 24 }}>
+        <div className="grid-2" style={{ marginTop: 24 }}>
           {GROUP_TYPES.map(g => {
             const active = answers.group_type === g.id;
             return (

@@ -91,7 +91,7 @@ export default function AdminAgent() {
       {/* Source Status */}
       <div style={cardStyle}>
         <h3 style={cardTitle}>Source Status</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        <div className="grid-3" style={{ marginTop: 8 }}>
           {SOURCES.map((s, i) => (
             <div key={i} style={{ padding: '12px 16px', borderRadius: 8, border: '1px solid var(--admin-border)', display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.status === 'active' ? '#22c55e' : 'var(--gold)' }} />

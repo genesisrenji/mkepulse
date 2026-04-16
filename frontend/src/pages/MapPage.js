@@ -64,7 +64,7 @@ export default function MapPage() {
         </p>
       </div>
 
-      <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--user-border)', height: 'calc(100vh - 180px)' }}>
+      <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--user-border)', height: 'calc(100vh - 200px)', minHeight: 400 }}>
         <MapContainer center={center} zoom={14} style={{ height: '100%', width: '100%' }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'

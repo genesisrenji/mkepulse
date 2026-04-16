@@ -29,7 +29,7 @@ export default function AdminAnalytics() {
     <div data-testid="admin-analytics">
       <h1 style={{ fontSize: 26, fontWeight: 800, color: 'var(--admin-text)', marginBottom: 24 }}>Analytics</h1>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+      <div className="grid-2" style={{ marginBottom: 24 }}>
         {/* Category Engagement */}
         <div style={cardStyle}>
           <h3 style={cardTitle}>Category Engagement</h3>

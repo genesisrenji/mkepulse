@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 class MKEPulseAPITester:
-    def __init__(self, base_url="https://6e012e97-6085-40c8-b0fe-bb395e2e6d2e.preview.emergentagent.com"):
+    def __init__(self, base_url="https://brewers-events.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.admin_token = None

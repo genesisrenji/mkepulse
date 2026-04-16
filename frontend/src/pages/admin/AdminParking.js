@@ -26,7 +26,7 @@ export default function AdminParking() {
       ) : (
         <>
           {/* Garage Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 28 }}>
+          <div className="grid-2" style={{ marginBottom: 28 }}>
             {garages.map((g, i) => {
               const fillPct = g.fill_pct || 0;
               const barColor = fillPct >= 90 ? '#ef4444' : fillPct >= 70 ? 'var(--gold)' : '#22c55e';

@@ -31,7 +31,7 @@ export default function AdminEvents() {
       {loading ? (
         <div style={{ color: 'var(--admin-text-secondary)', padding: 40 }}>Loading...</div>
       ) : (
-        <div style={{ background: 'var(--admin-surface)', borderRadius: 10, border: '1px solid var(--admin-border)', overflow: 'hidden' }}>
+        <div className="admin-table-wrap" style={{ background: 'var(--admin-surface)', borderRadius: 10, border: '1px solid var(--admin-border)', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--admin-border)' }}>

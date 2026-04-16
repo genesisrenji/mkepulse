@@ -146,7 +146,9 @@ function EventCard({ event, index, isPro }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--user-border)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--user-border)' }}
+        className="event-card-bottom">
+
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
