@@ -104,7 +104,7 @@ input, select, textarea { min-height: 44px; font-size: 16px; /* prevents iOS zoo
   .grid-3 { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 640px) {
-  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr !important; }
 }
 
 /* ========== Admin Table Responsive ========== */
